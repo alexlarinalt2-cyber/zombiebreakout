@@ -992,8 +992,8 @@ function upd(){
   if(comboMsgTimer>0)comboMsgTimer--;
   if(announceMsgTimer>0)announceMsgTimer--;
   if(streakTimer>0){streakTimer--;}else{streakKills=0;}
-  // Day/night: short 3-wave nights every 10 levels (waves 7-9, 17-19, ...)
-  let targetNight=(lv>=7&&lv%10>=7&&lv%10<=9)?1:0;
+  // Day/night: one night wave every 6 levels (waves 6, 12, 18, 24, ...)
+  let targetNight=(lv>0&&lv%6===0)?1:0;
   if(targetNight&&nightAlpha<0.85)nightAlpha=Math.min(0.85,nightAlpha+0.003);
   else if(!targetNight&&nightAlpha>0)nightAlpha=Math.max(0,nightAlpha-0.003);
   for(let i=killFeed.length-1;i>=0;i--){killFeed[i].l-=0.008;if(killFeed[i].l<=0)killFeed.splice(i,1);}
@@ -2730,23 +2730,31 @@ function dgover(){
   X.fillText(rLabel,W/2,rY+21);
   // Cost + coins-on-hand on one row below respawn button
   let infoY=rY+60;
+  X.font='bold 13px sans-serif';X.textBaseline='middle';
+  X.textAlign='left';
+  let hTxt=String(coins),htw=X.measureText(hTxt).width;
   if(rCost>0){
-    X.font='bold 13px sans-serif';X.textAlign='left';X.textBaseline='middle';
     let cTxt=String(rCost),ctw=X.measureText(cTxt).width;
-    let ciX=W/2-60-ctw-12;
+    let costCX=W/2-65,handCX=W/2+65;
+    let ciX=costCX-(ctw+2.5)/2;
+    X.textAlign='left';
     X.fillStyle='#b88010';X.beginPath();X.arc(ciX,infoY,6.5,0,Math.PI*2);X.fill();
     X.fillStyle='#ffd732';X.beginPath();X.arc(ciX,infoY,5,0,Math.PI*2);X.fill();
     X.fillStyle=canRespawn?'#ffe066':'rgba(255,150,150,0.9)';X.fillText(cTxt,ciX+9,infoY);
-    X.fillStyle='rgba(150,150,150,0.55)';X.font='11px sans-serif';X.textAlign='center';X.fillText('cost',W/2-60+ctw/2-ctw+14,infoY+10);
+    X.fillStyle='rgba(150,150,150,0.55)';X.font='11px sans-serif';X.textAlign='center';X.fillText('cost',costCX,infoY+11);
+    X.font='bold 13px sans-serif';X.textAlign='left';
+    let hiX=handCX-(htw+2.5)/2;
+    X.fillStyle='#7a5a10';X.beginPath();X.arc(hiX,infoY,6.5,0,Math.PI*2);X.fill();
+    X.fillStyle='#ffd732';X.beginPath();X.arc(hiX,infoY,5,0,Math.PI*2);X.fill();
+    X.fillStyle='rgba(255,220,120,0.95)';X.fillText(hTxt,hiX+9,infoY);
+    X.fillStyle='rgba(150,150,150,0.55)';X.font='11px sans-serif';X.textAlign='center';X.fillText('you have',handCX,infoY+11);
+  } else {
+    let hiX=W/2-(htw+2.5)/2;
+    X.fillStyle='#7a5a10';X.beginPath();X.arc(hiX,infoY,6.5,0,Math.PI*2);X.fill();
+    X.fillStyle='#ffd732';X.beginPath();X.arc(hiX,infoY,5,0,Math.PI*2);X.fill();
+    X.fillStyle='rgba(255,220,120,0.95)';X.fillText(hTxt,hiX+9,infoY);
+    X.fillStyle='rgba(150,150,150,0.55)';X.font='11px sans-serif';X.textAlign='center';X.fillText('you have',W/2,infoY+11);
   }
-  // Coins on hand (right side of the info row)
-  X.font='bold 13px sans-serif';X.textAlign='left';X.textBaseline='middle';
-  let hTxt=String(coins),htw=X.measureText(hTxt).width;
-  let hiX=W/2+28;
-  X.fillStyle='#7a5a10';X.beginPath();X.arc(hiX,infoY,6.5,0,Math.PI*2);X.fill();
-  X.fillStyle='#ffd732';X.beginPath();X.arc(hiX,infoY,5,0,Math.PI*2);X.fill();
-  X.fillStyle='rgba(255,220,120,0.95)';X.fillText(hTxt,hiX+9,infoY);
-  X.fillStyle='rgba(150,150,150,0.55)';X.font='11px sans-serif';X.textAlign='left';X.fillText('you have',hiX-38,infoY+10);
   // Restart + Return-to-Menu side by side at the bottom
   let bY=rY+80,bH=32,bGap=10,bHalf=(260-bGap)/2;
   let rsX=W/2-130,mnX=W/2-130+bHalf+bGap;
@@ -2922,15 +2930,19 @@ C.addEventListener('click',e=>{
     return;
   }
   if(st==='game_over'){
-    // Respawn button
-    if(ms.x>=W/2-130&&ms.x<=W/2+130&&ms.y>=H/2+158&&ms.y<=H/2+200){
+    // Geometry must match dgover() layout
+    let panelY=H/2-180,statsY=panelY+80,lbY=statsY+5*22+8;
+    let rY=lbY+80,bY=rY+80,bH=32,bGap=10,bHalf=(260-bGap)/2;
+    let rsX=W/2-130,mnX=W/2-130+bHalf+bGap;
+    // Main Menu button (always works)
+    if(ms.x>=mnX&&ms.x<=mnX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='menu';return;}
+    // Restart button
+    if(ms.x>=rsX&&ms.x<=rsX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='shop';return;}
+    // Respawn button (only if affordable)
+    if(ms.x>=W/2-130&&ms.x<=W/2+130&&ms.y>=rY&&ms.y<=rY+42){
       if(coins>=respawnCost())doRespawn();
       return;
     }
-    // Return to menu button
-    if(ms.x>=W/2-100&&ms.x<=W/2+100&&ms.y>=H/2+308&&ms.y<=H/2+336){st='menu';return;}
-    // Restart button
-    if(ms.x>=W/2-130&&ms.x<=W/2+130&&ms.y>=H/2+268&&ms.y<=H/2+300){st='shop';return;}
     return;
   }
   if(st==='paused'&&ms.y>H-80)ig();
