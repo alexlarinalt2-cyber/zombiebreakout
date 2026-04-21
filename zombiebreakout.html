@@ -121,8 +121,8 @@ const EBLDS=[
   {x:148,y:700,w:320,h:195,doorX:258,doorW:60,label:'Superstore',col:'#8a8c7c',
    crates:[{wx:236,wy:770,w:'shotgun',taken:false},{wx:426,wy:770,w:'assault',taken:false}],
    furniture:[
-    {x:162,y:835,w:100,h:14,solid:true,col:'#8890a0',dark:'#4a5060',type:'counter'},
-    {x:360,y:835,w:95,h:14,solid:true,col:'#8890a0',dark:'#4a5060',type:'counter'},
+    {x:162,y:835,w:100,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
+    {x:360,y:835,w:95,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
     {x:200,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
     {x:262,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
     {x:325,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
@@ -648,6 +648,7 @@ function spawnWave(){
     }
   }
   for(let b of EBLDS)for(let cr of b.crates)cr.taken=false;
+  if(lv%2===0){for(let b of EBLDS)if(b.medkit)b.medkit.taken=false;}
   waveInfo=comp;
 }
 
