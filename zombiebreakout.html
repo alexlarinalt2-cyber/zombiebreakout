@@ -43,13 +43,13 @@ function getGrenadeImg(){return window._GRENADE_CLEAN||IMG_GRENADE;}
 
 // Preloaded action icons
 const C=document.getElementById('gc'),X=C.getContext('2d');
-const W=700,H=480; // fixed logical game size
+let W=700,H=480; // dynamic — updated by resizeCanvas
 let SCALE=1;
 function resizeCanvas(){
-  SCALE=Math.min(window.innerWidth/W,window.innerHeight/H);
-  C.width=Math.round(W*SCALE);C.height=Math.round(H*SCALE);
-  C.style.left=((window.innerWidth-C.width)/2)+'px';
-  C.style.top=((window.innerHeight-C.height)/2)+'px';
+  SCALE=window.innerHeight/480;
+  W=Math.round(window.innerWidth/SCALE);H=480;
+  C.width=window.innerWidth;C.height=window.innerHeight;
+  C.style.left='0px';C.style.top='0px';
   X.setTransform(SCALE,0,0,SCALE,0,0);
 }
 resizeCanvas();
