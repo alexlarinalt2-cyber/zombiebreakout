@@ -123,10 +123,10 @@ const EBLDS=[
    furniture:[
     {x:162,y:835,w:100,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
     {x:360,y:835,w:95,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
-    {x:200,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
-    {x:262,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
-    {x:325,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
-    {x:388,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
+    {x:200,y:718,w:10,h:110,solid:false,col:'#9090a0',dark:'#4a5060',type:'shelf'},
+    {x:262,y:718,w:10,h:110,solid:false,col:'#9090a0',dark:'#4a5060',type:'shelf'},
+    {x:325,y:718,w:10,h:110,solid:false,col:'#9090a0',dark:'#4a5060',type:'shelf'},
+    {x:388,y:718,w:10,h:110,solid:false,col:'#9090a0',dark:'#4a5060',type:'shelf'},
    ]},
   // 3. Auto Workshop (center-north)
   {x:848,y:95,w:275,h:185,doorX:942,doorW:60,label:'Auto Shop',col:'#8c9080',
@@ -648,7 +648,7 @@ function spawnWave(){
     }
   }
   for(let b of EBLDS)for(let cr of b.crates)cr.taken=false;
-  if(lv%2===0){for(let b of EBLDS)if(b.medkit)b.medkit.taken=false;}
+  if(lv%2===1){for(let b of EBLDS)if(b.medkit)b.medkit.taken=false;}
   waveInfo=comp;
 }
 
