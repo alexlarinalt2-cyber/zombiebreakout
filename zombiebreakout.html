@@ -295,7 +295,7 @@ const PD=[
 ];
 
 // -- State -----------------------------------------------------
-let st='menu',sc=0,lv=1,kills=0,totalDmgDealt=0,shotsFired=0,shotsHit=0;
+let st='menu',sc=0,lv=1,kills=0,totalDmgDealt=0,shotsFired=0,shotsHit=0,runSaved=false;
 let coins=0,metaCoins=0,metaUnlocks={extraGrenade:false,startAmmo:false,extraArmor:false,smgStart:false};
 let respawnCount=0; // 0 = first respawn free, then 150 * 2^(n-1)
 let nightMode=false,nightAlpha=0; // day/night cycle
@@ -584,7 +584,7 @@ function ig(){
   scd=0;lb=0;grCharging=false;grCharge=0;muzzleFlash=0;
   meleeArc={active:false,timer:0,ang:0};
   waveClearTimer=0;upgradeChoices=[];
-  coins=0;nightMode=false;nightAlpha=0;streakKills=0;streakTimer=0;streakMsg='';streakMsgTimer=0;announceMsg='';announceMsgTimer=0;respawnCount=0;
+  coins=0;nightMode=false;nightAlpha=0;streakKills=0;streakTimer=0;streakMsg='';streakMsgTimer=0;announceMsg='';announceMsgTimer=0;respawnCount=0;runSaved=false;
   safeRoomBonus=false;lastBuildingId=-1;
   spawnDestructibles();
   // Apply character bonus
@@ -1177,7 +1177,7 @@ function upd(){
             addDmgNum(pl.x,pl.y-PR-14,'STUNNED!','#ff8800');
           }
           bst(pl.x,pl.y,'#ff1e1e',10,3);addDmgNum(pl.x,pl.y-PR-10,dmg,'#ff3030');playSound('hit');
-          if(pl.hp<=0){pl.hp=0;st='game_over';saveHS();saveMeta();bst(pl.x,pl.y,'#ff0000',40,7);}
+          if(pl.hp<=0){pl.hp=0;st='game_over';saveMeta();bst(pl.x,pl.y,'#ff0000',40,7);}
         }
       }
     } else z.attackT=0;
@@ -2801,7 +2801,7 @@ document.addEventListener('keydown',e=>{
     if(e.key==='1')doSwitch(0);if(e.key==='2')doSwitch(1);if(e.key==='3')doSwitch(2);if(e.key==='4')doSwitch(3);
   }
   if(e.key==='S'&&st==='menu'){initAudio();st='charselect';}
-  if((e.key==='r'||e.key==='R')&&st==='game_over'){st='shop';}
+  if((e.key==='r'||e.key==='R')&&st==='game_over'){if(!runSaved){saveHS();runSaved=true;}st='shop';}
 });
 document.addEventListener('keyup',e=>{
   ks[e.key]=false;
@@ -2935,9 +2935,9 @@ C.addEventListener('click',e=>{
     let rY=lbY+80,bY=rY+80,bH=32,bGap=10,bHalf=(260-bGap)/2;
     let rsX=W/2-130,mnX=W/2-130+bHalf+bGap;
     // Main Menu button (always works)
-    if(ms.x>=mnX&&ms.x<=mnX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='menu';return;}
+    if(ms.x>=mnX&&ms.x<=mnX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){if(!runSaved){saveHS();runSaved=true;}st='menu';return;}
     // Restart button
-    if(ms.x>=rsX&&ms.x<=rsX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='shop';return;}
+    if(ms.x>=rsX&&ms.x<=rsX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){if(!runSaved){saveHS();runSaved=true;}st='shop';return;}
     // Respawn button (only if affordable)
     if(ms.x>=W/2-130&&ms.x<=W/2+130&&ms.y>=rY&&ms.y<=rY+42){
       if(coins>=respawnCost())doRespawn();
