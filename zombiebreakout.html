@@ -121,8 +121,8 @@ const EBLDS=[
   {x:148,y:700,w:320,h:195,doorX:258,doorW:60,label:'Superstore',col:'#8a8c7c',
    crates:[{wx:236,wy:770,w:'shotgun',taken:false},{wx:426,wy:770,w:'assault',taken:false}],
    furniture:[
-    {x:162,y:835,w:100,h:14,solid:true,col:'#8890a0',dark:'#4a5060',type:'counter'},
-    {x:360,y:835,w:95,h:14,solid:true,col:'#8890a0',dark:'#4a5060',type:'counter'},
+    {x:162,y:835,w:100,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
+    {x:360,y:835,w:95,h:14,solid:false,col:'#8890a0',dark:'#4a5060',type:'counter'},
     {x:200,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
     {x:262,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
     {x:325,y:718,w:10,h:110,solid:true,col:'#9090a0',dark:'#4a5060',type:'shelf'},
@@ -169,6 +169,7 @@ const EBLDS=[
    ]},
   // 7. Hospital (south-center)
   {x:858,y:1688,w:315,h:195,doorX:972,doorW:60,label:'Hospital',col:'#909898',
+   medkit:{wx:1000,wy:1755,taken:false},
    crates:[{wx:900,wy:1812,w:'smg',taken:false},{wx:1095,wy:1812,w:'rocket',taken:false}],
    furniture:[
     {x:874,y:1702,w:284,h:14,solid:true,col:'#8098a0',dark:'#405060',type:'bench'},
@@ -295,7 +296,7 @@ const PD=[
 ];
 
 // -- State -----------------------------------------------------
-let st='menu',sc=0,lv=1,kills=0,totalDmgDealt=0,shotsFired=0,shotsHit=0;
+let st='menu',sc=0,lv=1,kills=0,totalDmgDealt=0,shotsFired=0,shotsHit=0,runSaved=false;
 let coins=0,metaCoins=0,metaUnlocks={extraGrenade:false,startAmmo:false,extraArmor:false,smgStart:false};
 let respawnCount=0; // 0 = first respawn free, then 150 * 2^(n-1)
 let nightMode=false,nightAlpha=0; // day/night cycle
@@ -578,13 +579,13 @@ function ig(){
   pl={x:WW/2,y:WH/2,hp:d.playerHp,maxHp:d.playerHp,inv:0,sht:0,spt:0,rft:0,mst:0,ldx:1,ldy:0,
     inventory:[{w:'pistol',ammo:Infinity}],slot:0,
     reloadMult:d.reloadMult,dmgBonus:d.dmgBonus,dmgMult:d.dmgMult,speedMult:1.0,grenades:d.grenades,
-    meleeRange:70,armor:0,piercePower:0,multiPistol:false};
+    meleeRange:70,armor:0,piercePower:0,multiPistol:false,medInv:0};
   zs=[];pu=[];bl=[];pt=[];decals=[];casings=[];dmgNums=[];dmgDirs=[];grenWorld=[];xpOrbs=[];killFeed=[];
   flowField=null;ffTimer=0;_lastFFcx=-1;_lastFFcy=-1;_blockedBitmap=null;meleeCd=0;ammoFlash={};comboKills=0;comboTimer=0;shakePow=0;
   scd=0;lb=0;grCharging=false;grCharge=0;muzzleFlash=0;
   meleeArc={active:false,timer:0,ang:0};
   waveClearTimer=0;upgradeChoices=[];
-  coins=0;nightMode=false;nightAlpha=0;streakKills=0;streakTimer=0;streakMsg='';streakMsgTimer=0;announceMsg='';announceMsgTimer=0;respawnCount=0;
+  coins=0;nightMode=false;nightAlpha=0;streakKills=0;streakTimer=0;streakMsg='';streakMsgTimer=0;announceMsg='';announceMsgTimer=0;respawnCount=0;runSaved=false;
   safeRoomBonus=false;lastBuildingId=-1;
   spawnDestructibles();
   // Apply character bonus
@@ -593,7 +594,7 @@ function ig(){
   if(metaUnlocks.extraGrenade)pl.grenades++;
   if(metaUnlocks.extraArmor)pl.armor++;
   if(metaUnlocks.startAmmo)for(let s of pl.inventory)if(s.w!=='pistol'&&s.ammo!==Infinity)s.ammo=Math.round(s.ammo*1.3);
-  for(let b of EBLDS)for(let cr of b.crates)cr.taken=false;
+  for(let b of EBLDS){for(let cr of b.crates)cr.taken=false;if(b.medkit)b.medkit.taken=false;}
   updCam();
   prepTimer=30*60;
   st='prep';
@@ -647,6 +648,7 @@ function spawnWave(){
     }
   }
   for(let b of EBLDS)for(let cr of b.crates)cr.taken=false;
+  if(lv%2===0){for(let b of EBLDS)if(b.medkit)b.medkit.taken=false;}
   waveInfo=comp;
 }
 
@@ -974,7 +976,7 @@ function upd(){
   updPlayerMove(dt);updCam();
 
   if(pl.inv>0)pl.inv--;if(pl.sht>0)pl.sht--;if(pl.spt>0)pl.spt--;
-  if(pl.rft>0)pl.rft--;if(pl.mst>0)pl.mst--;if(scd>0)scd--;if(lb>0)lb--;
+  if(pl.rft>0)pl.rft--;if(pl.mst>0)pl.mst--;if(pl.medInv>0)pl.medInv--;if(scd>0)scd--;if(lb>0)lb--;
   // Flamethrower: hold mouse to continuously fire
   if(mouseHeld&&scd===0&&st==='playing'){
     let cur=curWpn();
@@ -1167,7 +1169,7 @@ function upd(){
       } else {
         z.attackT+=dt;
         if(z.attackT%38<dt){z.swingT=1.0;z.swingSide*=-1;}
-        if(z.attackT%38>18&&z.attackT%38<18+dt*2&&pl.inv===0){
+        if(z.attackT%38>18&&z.attackT%38<18+dt*2&&pl.inv===0&&pl.medInv===0){
           let dmg=zDmg(lv,pl.armor);pl.hp-=dmg;pl.inv=50;
           addDmgDir(z.x,z.y);addShake(6);
           // Tank stomp: knocks player back and stuns briefly
@@ -1177,7 +1179,7 @@ function upd(){
             addDmgNum(pl.x,pl.y-PR-14,'STUNNED!','#ff8800');
           }
           bst(pl.x,pl.y,'#ff1e1e',10,3);addDmgNum(pl.x,pl.y-PR-10,dmg,'#ff3030');playSound('hit');
-          if(pl.hp<=0){pl.hp=0;st='game_over';saveHS();saveMeta();bst(pl.x,pl.y,'#ff0000',40,7);}
+          if(pl.hp<=0){pl.hp=0;st='game_over';saveMeta();bst(pl.x,pl.y,'#ff0000',40,7);}
         }
       }
     } else z.attackT=0;
@@ -1214,11 +1216,22 @@ function updPickups(){
     let u=pu[i];u.pulse=(u.pulse+0.1)%(Math.PI*2);
     if(dst([u.x,u.y],[pl.x,pl.y])<UR+PR){
       let t=u.pd.type;
-      if(t==='health'){pl.hp=Math.min(pl.maxHp,pl.hp+40);sc+=100;}
+      if(t==='health'){pl.hp=Math.min(pl.maxHp,pl.hp+60);sc+=100;}
       else if(t==='shield'){pl.sht=210;sc+=80;}else if(t==='speed'){pl.spt=210;sc+=80;}
       else if(t==='rapid'){pl.rft=210;sc+=80;}else if(t==='multi'){pl.mst=180;sc+=80;}
       else if(t==='nuke'){for(let i2=zs.length-1;i2>=0;i2--)if(!zs[i2].dying)killZ(i2);bst(pl.x,pl.y,'#c864ff',50,9);sc+=300;}
       bst(u.x,u.y,u.pd.col,14,4);pu.splice(i,1);playSound('pickup');
+    }
+  }
+  // Hospital medkit
+  for(let b of EBLDS){
+    if(!b.medkit||b.medkit.taken)continue;
+    if(dst([b.medkit.wx,b.medkit.wy],[pl.x,pl.y])<22){
+      b.medkit.taken=true;
+      pl.hp=pl.maxHp;pl.medInv=300;
+      bst(b.medkit.wx,b.medkit.wy,'#22ff88',20,6);
+      addDmgNum(b.medkit.wx,b.medkit.wy-24,'FULL HEAL + INVINCIBLE!','#22ff88');
+      playSound('pickup');sc+=250;
     }
   }
   // Weapon crates
@@ -1449,6 +1462,7 @@ function drawBoss(z,zx,zy){
 function drawPlayer(ppx,ppy){
   let[gdx,gdy]=nrm(ms.x-ppx,ms.y-ppy),perp=[-gdy,gdx];
   if(pl.sht>0){let sp2=Math.sin(tk*0.22)*5;X.globalAlpha=0.5;X.strokeStyle='#1ec8ff';X.lineWidth=3;X.beginPath();X.arc(ppx,ppy,PR+16+sp2,0,Math.PI*2);X.stroke();X.globalAlpha=0.1;X.fillStyle='#1ec8ff';X.fill();X.globalAlpha=1;}
+  if(pl.medInv>0){let sp2=Math.sin(tk*0.18)*6;X.globalAlpha=0.5+Math.sin(tk*0.25)*0.2;X.strokeStyle='#22ff88';X.lineWidth=3;X.beginPath();X.arc(ppx,ppy,PR+20+sp2,0,Math.PI*2);X.stroke();X.globalAlpha=0.12;X.fillStyle='#22ff88';X.fill();X.globalAlpha=1;}
   let cur2=curWpn();
   let gl=cur2.w==='sniper'?28:cur2.w==='shotgun'?18:22;
   let gw=cur2.w==='shotgun'?7:cur2.w==='sniper'?3:5;
@@ -1670,6 +1684,17 @@ function draw(){
   }
   X.globalAlpha=1;
   for(let b of EBLDS)for(let cr of b.crates)drawWCrate(cr);
+  // Draw hospital medkit
+  for(let b of EBLDS){
+    if(!b.medkit||b.medkit.taken)continue;
+    let mx=scx(b.medkit.wx),my=scy(b.medkit.wy);if(mx<-30||mx>W+30||my<-30||my>H+30)continue;
+    let pulse=Math.sin(tk*0.12)*0.5+0.5;
+    X.globalAlpha=0.18+pulse*0.12;X.fillStyle='#22ff88';X.beginPath();X.arc(mx,my,26,0,Math.PI*2);X.fill();X.globalAlpha=1;
+    X.fillStyle='#ffffff';X.fillRect(mx-12,my-12,24,24);X.strokeStyle='#0a6420';X.lineWidth=1.5;X.strokeRect(mx-12,my-12,24,24);
+    X.fillStyle='#cc0000';X.fillRect(mx-9,my-3,18,6);X.fillRect(mx-3,my-9,6,18);
+    X.fillStyle='rgba(255,255,255,0.7)';X.font='bold 8px sans-serif';X.textAlign='center';X.textBaseline='middle';
+    X.fillText('MEDKIT',mx,my+18);
+  }
   // Power-ups
   for(let u of pu){
     let ux=scx(u.x),uy=scy(u.y);if(ux<-30||ux>W+30||uy<-30||uy>H+30)continue;
@@ -2036,6 +2061,7 @@ function dhud(){
     let ac=[];
     if(pl.sht>0)ac.push(['SHD','#1ec8ff',pl.sht,210]);if(pl.spt>0)ac.push(['SPD','#ffdc00',pl.spt,210]);
     if(pl.rft>0)ac.push(['RFR','#ff8200',pl.rft,210]);if(pl.mst>0)ac.push(['MLT','#ff3cc8',pl.mst,180]);
+    if(pl.medInv>0)ac.push(['MED','#22ff88',pl.medInv,300]);
     for(let i=0;i<ac.length;i++){
       let[lb2,col,t,mx2]=ac[i],bx=10+i*72,by=H-130;
       rrx(bx,by,66,24,4,'rgba(0,0,0,0.7)');let fw=Math.round(64*(t/mx2));
@@ -2113,6 +2139,7 @@ function dmap(){
   X.fillStyle='#555550';for(let b of BLDS)X.fillRect(mx+b.x*sx2,my+b.y*sy2,Math.max(2,b.w*sx2),Math.max(2,b.h*sy2));
   X.fillStyle='#786860';for(let b of EBLDS)X.fillRect(mx+b.x*sx2,my+b.y*sy2,Math.max(3,b.w*sx2),Math.max(3,b.h*sy2));
   X.fillStyle='#fd4';for(let b of EBLDS)for(let cr of b.crates)if(!cr.taken){X.beginPath();X.arc(mx+cr.wx*sx2,my+cr.wy*sy2,2,0,Math.PI*2);X.fill();}
+  X.fillStyle='#22ff88';for(let b of EBLDS)if(b.medkit&&!b.medkit.taken){X.beginPath();X.arc(mx+b.medkit.wx*sx2,my+b.medkit.wy*sy2,3,0,Math.PI*2);X.fill();}
   X.fillStyle='#4f4';for(let u of pu){X.beginPath();X.arc(mx+u.x*sx2,my+u.y*sy2,2,0,Math.PI*2);X.fill();}
   // Destructibles on minimap
   for(let d of destructibles){if(!d.alive)continue;X.fillStyle=d.type==='car'?'#ff6600':'#ff8800';X.beginPath();X.arc(mx+d.x*sx2,my+d.y*sy2,1.5,0,Math.PI*2);X.fill();}
@@ -2801,7 +2828,7 @@ document.addEventListener('keydown',e=>{
     if(e.key==='1')doSwitch(0);if(e.key==='2')doSwitch(1);if(e.key==='3')doSwitch(2);if(e.key==='4')doSwitch(3);
   }
   if(e.key==='S'&&st==='menu'){initAudio();st='charselect';}
-  if((e.key==='r'||e.key==='R')&&st==='game_over'){st='shop';}
+  if((e.key==='r'||e.key==='R')&&st==='game_over'){if(!runSaved){saveHS();runSaved=true;}st='shop';}
 });
 document.addEventListener('keyup',e=>{
   ks[e.key]=false;
@@ -2935,9 +2962,9 @@ C.addEventListener('click',e=>{
     let rY=lbY+80,bY=rY+80,bH=32,bGap=10,bHalf=(260-bGap)/2;
     let rsX=W/2-130,mnX=W/2-130+bHalf+bGap;
     // Main Menu button (always works)
-    if(ms.x>=mnX&&ms.x<=mnX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='menu';return;}
+    if(ms.x>=mnX&&ms.x<=mnX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){if(!runSaved){saveHS();runSaved=true;}st='menu';return;}
     // Restart button
-    if(ms.x>=rsX&&ms.x<=rsX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){st='shop';return;}
+    if(ms.x>=rsX&&ms.x<=rsX+bHalf&&ms.y>=bY&&ms.y<=bY+bH){if(!runSaved){saveHS();runSaved=true;}st='shop';return;}
     // Respawn button (only if affordable)
     if(ms.x>=W/2-130&&ms.x<=W/2+130&&ms.y>=rY&&ms.y<=rY+42){
       if(coins>=respawnCost())doRespawn();
