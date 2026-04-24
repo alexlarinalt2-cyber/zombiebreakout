@@ -1123,6 +1123,26 @@ function upd(){
     if(fistAnim.timer>0)fistAnim.timer--;else fistAnim.active=false;
     if(muzzleFlash>0)muzzleFlash--;
     if(grCharging){grCharge=Math.min(1,grCharge+0.018);}
+    if(mpMode){
+      // MP prep: send position every frame so other players see us moving.
+      // Prep ends when server sends wave:zombies, not via local timer.
+      if(announceMsgTimer>0)announceMsgTimer--;
+      if(comboMsgTimer>0)comboMsgTimer--;
+      for(let k in ammoFlash){ammoFlash[k]--;if(ammoFlash[k]<=0)delete ammoFlash[k];}
+      for(let i=killFeed.length-1;i>=0;i--){killFeed[i].l-=0.008;if(killFeed[i].l<=0)killFeed.splice(i,1);}
+      for(let i=dmgNums.length-1;i>=0;i--){let d=dmgNums[i];d.y+=d.vy;d.vy*=0.95;d.l-=0.025;if(d.l<=0)dmgNums.splice(i,1);}
+      for(let i=casings.length-1;i>=0;i--){let cs=casings[i];cs.x+=cs.vx;cs.y+=cs.vy;cs.vx*=0.88;cs.vy*=0.88;cs.rot+=cs.rotv;cs.rotv*=0.95;cs.l-=0.02;if(cs.l<=0)casings.splice(i,1);}
+      for(let i=decals.length-1;i>=0;i--){decals[i].l-=0.002;if(decals[i].l<=0)decals.splice(i,1);}
+      for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i];o.l-=0.015;if(o.l<=0)xpOrbs.splice(i,1);}
+      for(let i=dmgDirs.length-1;i>=0;i--){dmgDirs[i].l-=0.018;if(dmgDirs[i].l<=0)dmgDirs.splice(i,1);}
+      if(prepTimer>0)prepTimer--;
+      let _tn=(lv>0&&lv%6===0)?1:0;
+      if(_tn&&nightAlpha<0.85)nightAlpha=Math.min(0.85,nightAlpha+0.003);
+      else if(!_tn&&nightAlpha>0)nightAlpha=Math.max(0,nightAlpha-0.003);
+      mpSendInput();
+      return;
+    }
+    // Singleplayer prep:
     prepTimer--;
     if(prepTimer<=0){
       spawnWave();waveInfo=waveComp(lv);
@@ -1158,7 +1178,8 @@ function upd(){
     for(let i=dmgNums.length-1;i>=0;i--){let d=dmgNums[i];d.y+=d.vy;d.vy*=0.95;d.l-=0.025;if(d.l<=0)dmgNums.splice(i,1);}
     for(let i=casings.length-1;i>=0;i--){let cs=casings[i];cs.x+=cs.vx;cs.y+=cs.vy;cs.vx*=0.88;cs.vy*=0.88;cs.rot+=cs.rotv;cs.rotv*=0.95;cs.l-=0.02;if(cs.l<=0)casings.splice(i,1);}
     for(let i=decals.length-1;i>=0;i--){decals[i].l-=0.002;if(decals[i].l<=0)decals.splice(i,1);}
-    if(st==='prep'&&prepTimer>0)prepTimer--;
+    for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i];let dx=scx(pl.x)-scx(o.x),dy=scy(pl.y)-scy(o.y);let d=Math.hypot(dx,dy);if(d<18){xpOrbs.splice(i,1);continue;}let sp2=Math.max(2,8-d*0.02);o.x+=dx/d*sp2;o.y+=dy/d*sp2;o.l-=0.015;if(o.l<=0)xpOrbs.splice(i,1);}
+    for(let i=dmgDirs.length-1;i>=0;i--){dmgDirs[i].l-=0.018;if(dmgDirs[i].l<=0)dmgDirs.splice(i,1);}
     updPickups();  // crate loot is local per player — each client tracks their own taken state
     updParticles();
     // Flamethrower auto-fire on hold in multiplayer (other weapons fire on mousedown/keydown)
@@ -2090,6 +2111,8 @@ function draw(){
   X.fillStyle=vgG;X.fillRect(0,0,W,H);
   // HUD and minimap drawn AFTER night overlay so they stay fully lit
   dhud();dmap();
+  // Off-screen teammate arrows — always visible in MP (drawn after HUD so they're on top)
+  drawMpOffscreenArrows();
   // Low HP vignette
   if(pl.hp<40){
     let intensity=(1-pl.hp/40)*0.75,pulse=0.6+Math.sin(tk*0.08)*0.4;
@@ -2168,7 +2191,7 @@ function slotBarH(){let ns=pl.inventory?pl.inventory.length:1;return ns>0?54:0;}
 function drawPrepOverlay(){
   let secs=Math.ceil(prepTimer/60);
   // Top banner only — world stays fully visible behind it
-  let bannerH=mpMode?84:64;
+  let bannerH=64;
   X.fillStyle='rgba(0,0,0,0.78)';X.fillRect(0,0,W,bannerH);
   X.textAlign='center';X.textBaseline='middle';
   X.fillStyle='#ffdc00';X.font='bold 13px sans-serif';
@@ -2180,46 +2203,37 @@ function drawPrepOverlay(){
   X.fillStyle=secs<=5?'#ff4040':'#ffdc00';X.fillRect(bx,by,Math.round(barW*frac),barH);
   X.fillStyle=secs<=5?'#ff4040':'#fff';X.font='bold 12px monospace';
   X.fillText(secs+'s',W/2,by+barH+9);
-  // MP only: show incoming wave composition as a compact text row
-  if(mpMode){
-    let comp=mpNextWaveComp;
-    let labels={basic:'Basic',runner:'Runners',tank:'Tanks',exploder:'Exploders',boss:'BOSS'};
-    let entries=Object.entries(comp).filter(([,v])=>v>0);
-    if(entries.length>0){
-      let parts=entries.map(([k,v])=>(v>1?v+'× ':'')+labels[k]);
-      X.fillStyle='rgba(255,180,60,0.85)';X.font='11px sans-serif';X.textAlign='center';X.textBaseline='middle';
-      X.fillText('Wave '+(mpWave||1)+':  '+parts.join('  ·  '),W/2,72);
-    }
-  }
-  // Off-screen teammate arrows — small, at screen edges, world stays clear
-  if(mpMode){
-    const charCols=['#2854c8','#c89020','#28a050'];
-    for(let p of mpPlayers){
-      if(p.id===mpMyId||!p.alive)continue;
-      let sx=scx(p.x),sy=scy(p.y);
-      // Only draw arrow if player is off-screen
-      if(sx>30&&sx<W-30&&sy>bannerH&&sy<H-30)continue;
-      let ang=Math.atan2(sy-H/2,sx-W/2);
-      // Find edge intersection
-      let margin=28,dsx=sx-W/2,dsy=sy-H/2;
-      let sx_=Math.abs(dsx)>0.001?Math.abs((W/2-margin)/dsx):Infinity;
-      let sy_=Math.abs(dsy)>0.001?Math.abs((H/2-margin)/dsy):Infinity;
-      let sc_=Math.min(sx_,sy_);
-      let ex=Math.max(margin,Math.min(W-margin,W/2+dsx*sc_));
-      let ey=Math.max(bannerH+margin,Math.min(H-margin,H/2+dsy*sc_));
-      let col=charCols[p.char||0]||'#4488ff';
-      let alpha=0.72+Math.sin(tk*0.12)*0.28;
-      X.save();X.globalAlpha=alpha;
-      X.translate(ex,ey);X.rotate(ang);
-      X.fillStyle=col;X.strokeStyle='rgba(255,255,255,0.9)';X.lineWidth=1.5;
-      X.beginPath();X.moveTo(11,0);X.lineTo(-6,6);X.lineTo(-3,0);X.lineTo(-6,-6);X.closePath();
-      X.fill();X.stroke();
-      X.restore();
-      X.globalAlpha=alpha;
-      X.fillStyle='#fff';X.font='bold 9px sans-serif';X.textAlign='center';X.textBaseline='top';
-      X.fillText(p.name.slice(0,10),ex,ey+13);
-      X.globalAlpha=1;
-    }
+}
+
+// -- Off-screen teammate arrows (always visible in MP) -----------
+function drawMpOffscreenArrows(){
+  if(!mpMode||!mpPlayers.length)return;
+  const charCols=['#2854c8','#c89020','#28a050'];
+  let topMargin=st==='prep'?68:20; // clear the prep banner if active
+  for(let p of mpPlayers){
+    if(p.id===mpMyId||!p.alive)continue;
+    let sx=scx(p.x),sy=scy(p.y);
+    // Only draw arrow if player is off-screen (or close to edge)
+    if(sx>30&&sx<W-30&&sy>topMargin&&sy<H-30)continue;
+    let ang=Math.atan2(sy-H/2,sx-W/2);
+    let margin=28,dsx=sx-W/2,dsy=sy-H/2;
+    let tsx=Math.abs(dsx)>0.001?Math.abs((W/2-margin)/dsx):Infinity;
+    let tsy=Math.abs(dsy)>0.001?Math.abs((H/2-margin)/dsy):Infinity;
+    let tc=Math.min(tsx,tsy);
+    let ex=Math.max(margin,Math.min(W-margin,W/2+dsx*tc));
+    let ey=Math.max(topMargin+margin,Math.min(H-margin,H/2+dsy*tc));
+    let col=charCols[p.char||0]||'#4488ff';
+    let alpha=0.72+Math.sin(tk*0.12)*0.28;
+    X.save();X.globalAlpha=alpha;
+    X.translate(ex,ey);X.rotate(ang);
+    X.fillStyle=col;X.strokeStyle='rgba(255,255,255,0.9)';X.lineWidth=1.5;
+    X.beginPath();X.moveTo(11,0);X.lineTo(-6,6);X.lineTo(-3,0);X.lineTo(-6,-6);X.closePath();
+    X.fill();X.stroke();
+    X.restore();
+    X.globalAlpha=alpha;
+    X.fillStyle='#fff';X.font='bold 9px sans-serif';X.textAlign='center';X.textBaseline='top';
+    X.fillText(p.name.slice(0,10),ex,ey+13);
+    X.globalAlpha=1;
   }
 }
 
@@ -3193,6 +3207,8 @@ function doRespawn(){
     }
   }
   bst(pl.x,pl.y,'#ffdc00',40,7);addShake(8);playSound('pickup');
+  // In MP: tell server we're alive again so HP syncs correctly and it stops sending player:died
+  if(mpMode&&socket)socket.emit('player:respawn');
   st='playing';return true;
 }
 function dgover(){
