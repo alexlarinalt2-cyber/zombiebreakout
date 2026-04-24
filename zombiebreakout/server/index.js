@@ -350,15 +350,17 @@ function startGame(room){
   let tgt=closestPlayer(room,WW/2,WH/2);
   room.ff=buildFF(tgt.x,tgt.y);room.ffTimer=30;
   room.gameLoop=setInterval(()=>gameTick(room),33); // ~30 TPS
-  // Socket.IO guarantees message ordering on a single connection.
-  // Emit game:started first — client will process it and clear zs before wave:zombies arrives.
-  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv});
-  spawnWave(room); // emits wave:zombies immediately after — client always receives game:started first
+  // Emit game:started — clients enter 10-second prep phase.
+  // wave:zombies arrives 10s later so players can grab weapons first.
+  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv,prepTime:10});
+  if(room.prepTimeout)clearTimeout(room.prepTimeout);
+  room.prepTimeout=setTimeout(()=>{if(room.inGame)spawnWave(room);},10000);
   io.emit('lobby:rooms',{rooms:roomList()});
 }
 
 function stopGame(room){
   if(room.gameLoop){clearInterval(room.gameLoop);room.gameLoop=null;}
+  if(room.prepTimeout){clearTimeout(room.prepTimeout);room.prepTimeout=null;}
   room.inGame=false;room.gst='waiting';room.zs=[];room.bl=[];
 }
 

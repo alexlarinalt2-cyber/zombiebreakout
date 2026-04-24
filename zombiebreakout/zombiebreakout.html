@@ -1156,6 +1156,7 @@ function upd(){
     for(let i=killFeed.length-1;i>=0;i--){killFeed[i].l-=0.008;if(killFeed[i].l<=0)killFeed.splice(i,1);}
     for(let i=dmgNums.length-1;i>=0;i--){let d=dmgNums[i];d.y+=d.vy;d.vy*=0.95;d.l-=0.025;if(d.l<=0)dmgNums.splice(i,1);}
     for(let i=casings.length-1;i>=0;i--){let cs=casings[i];cs.x+=cs.vx;cs.y+=cs.vy;cs.vx*=0.88;cs.vy*=0.88;cs.rot+=cs.rotv;cs.rotv*=0.95;cs.l-=0.02;if(cs.l<=0)casings.splice(i,1);}
+    if(st==='prep'&&prepTimer>0)prepTimer--;
     updPickups();  // crate loot is local per player — each client tracks their own taken state
     updParticles();
     // Flamethrower auto-fire on hold in multiplayer (other weapons fire on mousedown/keydown)
@@ -1195,19 +1196,26 @@ function upd(){
         mpRemoteBullets.splice(i,1);
       }
     }
-    // ── Flow field rebuild — target centroid of all alive players so zombies split between players ──
-    ffTimer--;if(ffTimer<=0){
-      // Compute centroid of local player + all alive teammates
-      let ftx=pl.x,fty=pl.y,fn=1;
-      for(let p of mpPlayers){if(p.id!==mpMyId&&p.alive){ftx+=p.x;fty+=p.y;fn++;}}
-      ftx/=fn;fty/=fn;
-      let pcx=ftx/GCELL|0,pcy=fty/GCELL|0;
-      if(pcx!==_lastFFcx||pcy!==_lastFFcy){buildFF(ftx,fty);_lastFFcx=pcx;_lastFFcy=pcy;}
-      ffTimer=30;
+    // ── Night mode transitions (waves 6, 12, 18...) ──
+    let _targetNight=(lv>0&&lv%6===0)?1:0;
+    if(_targetNight&&nightAlpha<0.85)nightAlpha=Math.min(0.85,nightAlpha+0.003);
+    else if(!_targetNight&&nightAlpha>0)nightAlpha=Math.max(0,nightAlpha-0.003);
+    // ── During prep phase skip zombie AI (no zombies yet) ──
+    if(st!=='prep'){
+      // ── Flow field rebuild — target centroid of all alive players so zombies split between players ──
+      ffTimer--;if(ffTimer<=0){
+        // Compute centroid of local player + all alive teammates
+        let ftx=pl.x,fty=pl.y,fn=1;
+        for(let p of mpPlayers){if(p.id!==mpMyId&&p.alive){ftx+=p.x;fty+=p.y;fn++;}}
+        ftx/=fn;fty/=fn;
+        let pcx=ftx/GCELL|0,pcy=fty/GCELL|0;
+        if(pcx!==_lastFFcx||pcy!==_lastFFcy){buildFF(ftx,fty);_lastFFcx=pcx;_lastFFcy=pcy;}
+        ffTimer=30;
+      }
+      if(tk%120===0&&zs.length>0)for(let i=0;i<zs.length;i++)zs[i].surroundAng=(i/zs.length)*Math.PI*2+Math.random()*0.5;
+      // ── Run zombie AI locally (singleplayer feel in multiplayer) ──
+      updZombies(dt);
     }
-    if(tk%120===0&&zs.length>0)for(let i=0;i<zs.length;i++)zs[i].surroundAng=(i/zs.length)*Math.PI*2+Math.random()*0.5;
-    // ── Run zombie AI locally (singleplayer feel in multiplayer) ──
-    updZombies(dt);
     mpSendInput();
     return;
   }
@@ -3463,7 +3471,8 @@ function mpInitLobby(){
       zs=[];bl=[];pu=[];grenWorld=[];
       for(let b of EBLDS){for(let cr of b.crates)cr.taken=false;if(b.medkit)b.medkit.taken=false;}
       _mpLastInvLen=1;mpStateTime=performance.now();mpRemoteBullets=[];
-      st='playing';
+      prepTimer=(d.prepTime||10)*60; // 10-second prep phase countdown
+      st='prep'; // wave:zombies event will flip this to 'playing'
     });
     socket.on('state',d=>{
       mpPrevPlayers=mpPlayers; // snapshot old positions for interpolation
@@ -3494,12 +3503,20 @@ function mpInitLobby(){
         zigzagTimer:z.zigzagTimer||30,zigzagOffset:z.zigzagOffset||0,
         flankTimer:z.flankTimer||60,
       }));
-      buildFF(); // build flow field immediately for the new wave
+      // Build flow field toward centroid of all alive players (same logic as mpMode ffTimer)
+      let _ftx=pl.x,_fty=pl.y,_fn=1;
+      for(let p of mpPlayers){if(p.id!==mpMyId&&p.alive){_ftx+=p.x;_fty+=p.y;_fn++;}}
+      buildFF(_ftx/_fn,_fty/_fn);
+      st='playing'; // transition out of prep phase or wave_clear into playing
     });
     // Another client killed a zombie — remove it from our local simulation
     socket.on('zombie:died',d=>{
       let idx=zs.findIndex(z=>z.id===d.id&&!z.dying);
-      if(idx>=0){let z=zs[idx];z.dying=true;z.dyingVx=(Math.random()-0.5)*6;z.dyingVy=-(Math.random()*3+1);z.dyingTimer=22;}
+      if(idx>=0){
+        let z=zs[idx];
+        addDecal(z.x,z.y,(ZT[z.type||'basic']||ZT.basic).r+8,'#4a0000'); // blood splat (fades like singleplayer)
+        z.dying=true;z.dyingVx=(Math.random()-0.5)*6;z.dyingVy=-(Math.random()*3+1);z.dyingTimer=22;
+      }
     });
     // Another player fired — simulate their bullet locally at 60fps + show muzzle flash
     socket.on('bullet:fired',d=>{
@@ -3520,12 +3537,13 @@ function mpInitLobby(){
       // Do NOT call killZ — that would credit local player with streak/combo.
       // zombie:died will arrive from server when the killing client's zombie:killed is processed.
       if(z.hp<=0&&!z.dying){
+        addDecal(z.x,z.y,(ZT[z.type||'basic']||ZT.basic).r+8,'#4a0000'); // blood splat
         z.dying=true;
         z.dyingVx=(Math.random()-0.5)*8;z.dyingVy=-(Math.random()*3+2);z.dyingTimer=22;
       }
     });
     socket.on('wave:clear',d=>{announce('Wave '+d.lv+' clear!');});
-    socket.on('wave:start',d=>{mpWave=d.lv;lv=d.lv;announce('Wave '+d.lv);});
+    socket.on('wave:start',d=>{mpWave=d.lv;lv=d.lv;announce('Wave '+d.lv);if(st!=='playing')st='playing';});
     socket.on('player:died',()=>{if(mpMode)st='game_over';});
     socket.on('disconnect',()=>{mpMode=false;mpRoom=null;alert('Disconnected from server.');st='menu';});
   }else{
@@ -3854,7 +3872,13 @@ function drawMpPlayers(){
     let px=scx(wx),py=scy(wy);
     let col=charCols[p.char||0]||'#2854c8';
     let acc=charAccents[p.char||0]||'#1ec8ff';
+    // Interpolate gun angle between server ticks (handles wrap-around at ±π)
     let ang=typeof p.angle==='number'?p.angle:0;
+    if(prev&&typeof prev.angle==='number'){
+      let da=ang-prev.angle;
+      while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;
+      ang=prev.angle+da*_t;
+    }
 
     // Grounded shadow (matches drawPlayer)
     X.globalAlpha=0.32;X.fillStyle='#000510';
