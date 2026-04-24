@@ -356,6 +356,7 @@ let mpRoom=null;          // {id, name, host, difficulty, players:[]}
 let mpMyId='';            // own socket id
 let mpPlayers=[];         // all players from server state (includes self)
 let mpPrevPlayers=[];     // previous server state — used to interpolate other players between ticks
+let mpRemoteBullets=[];   // other players' bullets simulated locally at 60fps (via bullet:fired events)
 let mpZombies=[];         // server zombies
 let mpBullets=[];         // server bullets
 let mpWave=1;             // current wave from server
@@ -766,9 +767,14 @@ function fb(){
   let wpn=WPN[cur.w]||WPN.pistol,sp=wpn.bspd,dmg=Math.max(1,Math.round((wpn.dmg+pl.dmgBonus+(cur.dmgMod||0))*(pl.dmgMult||1))),pellts=wpn.pellts;
   if(cur.w==='pistol'&&(pl.mst>0||pl.multiPistol))pellts=3;
   let base=Math.atan2(ny,nx);
-  let mk=(ang,extra={})=>({x:pl.x,y:pl.y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,
-    l:cur.w==='shotgun'?52:cur.w==='flame'?28:85,dmg,pierce:pl.piercePower,hitCount:0,
-    type:wpn.type||'bullet',...extra});
+  // mk() creates a bullet and, in mpMode, immediately tells the server so other clients see it instantly
+  let mk=(ang,extra={})=>{
+    let b={x:pl.x,y:pl.y,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp,
+      l:cur.w==='shotgun'?52:cur.w==='flame'?28:85,dmg,pierce:pl.piercePower,hitCount:0,
+      type:wpn.type||'bullet',...extra};
+    if(mpMode&&socket)socket.emit('bullet:fire',{x:b.x,y:b.y,vx:b.vx,vy:b.vy,l:b.l,wtype:b.type,dmg:b.dmg,pierce:b.pierce||0});
+    return b;
+  };
 
   if(cur.w==='flame'){
     // 8 fire particles per burst, varied size, spread cone
@@ -776,17 +782,19 @@ function fb(){
     for(let i=0;i<count;i++){
       let a=base+(Math.random()-0.5)*wpn.sprd*2.2;
       let speed=wpn.bspd*(0.6+Math.random()*0.8);
-      bl.push({x:pl.x,y:pl.y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,
+      let fb2={x:pl.x,y:pl.y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,
         l:22+Math.random()*14,type:'flame',
         dmg:Math.max(1,Math.round(dmg*0.8)),pierce:0,hitCount:0,
-        sz:14+Math.random()*16});
+        sz:14+Math.random()*16};
+      bl.push(fb2);
+      if(mpMode&&socket)socket.emit('bullet:fire',{x:fb2.x,y:fb2.y,vx:fb2.vx,vy:fb2.vy,l:fb2.l,wtype:'flame',dmg:fb2.dmg,pierce:0});
     }
     // Muzzle glow
     muzzlePos={x:pl.x+nx*(PR+8),y:pl.y+ny*(PR+8)};muzzleFlash=6;
   } else if(cur.w==='rocket'){
     bl.push({...mk(base),type:'rocket',l:140,sz:8});
   } else if(cur.w==='smg'){
-    // SMG fires a burst of 3
+    // SMG fires a burst of 3 — mk() handles bullet:fire emit inside each timeout
     for(let b=0;b<3;b++){
       setTimeout(()=>{
         if(st!=='playing')return;
@@ -1142,6 +1150,9 @@ function upd(){
     if(grCharging){grCharge=Math.min(1,grCharge+0.018);}
     for(let k in ammoFlash){ammoFlash[k]--;if(ammoFlash[k]<=0)delete ammoFlash[k];}
     if(announceMsgTimer>0)announceMsgTimer--;
+    if(comboMsgTimer>0)comboMsgTimer--;
+    if(comboTimer>0){comboTimer--;if(comboTimer===0)comboKills=0;}
+    if(streakTimer>0){streakTimer--;}else{streakKills=0;}
     for(let i=killFeed.length-1;i>=0;i--){killFeed[i].l-=0.008;if(killFeed[i].l<=0)killFeed.splice(i,1);}
     for(let i=dmgNums.length-1;i>=0;i--){let d=dmgNums[i];d.y+=d.vy;d.vy*=0.95;d.l-=0.025;if(d.l<=0)dmgNums.splice(i,1);}
     for(let i=casings.length-1;i>=0;i--){let cs=casings[i];cs.x+=cs.vx;cs.y+=cs.vy;cs.vx*=0.88;cs.vy*=0.88;cs.rot+=cs.rotv;cs.rotv*=0.95;cs.l-=0.02;if(cs.l<=0)casings.splice(i,1);}
@@ -1174,6 +1185,15 @@ function upd(){
         }
       }
       if(bhit)continue;
+    }
+    // ── Advance remote players' bullets locally at 60fps (from bullet:fired events) ──
+    for(let i=mpRemoteBullets.length-1;i>=0;i--){
+      let b=mpRemoteBullets[i];b.x+=b.vx*dt;b.y+=b.vy*dt;b.l-=dt;
+      let hw=bulletHitsWall(b.x,b.y);
+      if(b.l<=0||hw||b.x<-20||b.x>WW+20||b.y<-20||b.y>WH+20){
+        if(hw)bst(b.x,b.y,'#bbb',3,2);
+        mpRemoteBullets.splice(i,1);
+      }
     }
     // ── Flow field rebuild — target centroid of all alive players so zombies split between players ──
     ffTimer--;if(ffTimer<=0){
@@ -1839,14 +1859,9 @@ function draw(){
     X.fillStyle='rgba(255,220,0,0.4)';X.beginPath();X.arc(ox,oy,7,0,Math.PI*2);X.fill();
     X.globalAlpha=1;
   }
-  // Bullets — local client-predicted bullets; in mpMode also render teammates' server bullets
+  // Bullets — local bullets + other players' bullets (simulated locally via bullet:fired events)
   let _bl=bl;
-  if(mpMode){
-    // Divide by 16.67ms (one 60fps frame) so remote bullets advance at same visual speed as local bullets.
-    // Server now moves bullets at vx*2 per tick to stay in sync with this extrapolation.
-    let _age=Math.min((performance.now()-mpStateTime)/16.67,3);
-    bl=[..._bl,...mpBullets.filter(b=>b.owner!==mpMyId).map(b=>({...b,x:b.x+b.vx*_age,y:b.y+b.vy*_age,type:b.wtype||'bullet'}))];
-  }
+  if(mpMode)bl=[..._bl,...mpRemoteBullets];
   for(let b of bl){
     let bx=scx(b.x),by=scy(b.y);
     if(b.type==='flame'){
@@ -3447,7 +3462,7 @@ function mpInitLobby(){
       // Clients simulate zombies locally — clear any ig() may have spawned, wave:zombies arrives separately
       zs=[];bl=[];pu=[];grenWorld=[];
       for(let b of EBLDS){for(let cr of b.crates)cr.taken=false;if(b.medkit)b.medkit.taken=false;}
-      _mpLastInvLen=1;mpStateTime=performance.now();
+      _mpLastInvLen=1;mpStateTime=performance.now();mpRemoteBullets=[];
       st='playing';
     });
     socket.on('state',d=>{
@@ -3485,6 +3500,16 @@ function mpInitLobby(){
     socket.on('zombie:died',d=>{
       let idx=zs.findIndex(z=>z.id===d.id&&!z.dying);
       if(idx>=0){let z=zs[idx];z.dying=true;z.dyingVx=(Math.random()-0.5)*6;z.dyingVy=-(Math.random()*3+1);z.dyingTimer=22;}
+    });
+    // Another player fired — simulate their bullet locally at 60fps + show muzzle flash
+    socket.on('bullet:fired',d=>{
+      mpRemoteBullets.push({x:d.x,y:d.y,vx:d.vx,vy:d.vy,l:d.l||85,
+        type:d.wtype||'bullet',wtype:d.wtype,dmg:d.dmg||1,pierce:d.pierce||0,hitCount:0,sz:d.sz||8});
+      // Muzzle flash particles at their gun barrel
+      let ang=Math.atan2(d.vy,d.vx);
+      let mx=d.x+Math.cos(ang)*(PR+8),my=d.y+Math.sin(ang)*(PR+8);
+      if(d.wtype==='flame')bst(d.x,d.y,'#ff6600',4,3);
+      else bst(mx,my,'#ffffaa',5,2);
     });
     // Another client damaged a zombie — sync HP bar so both players see same health
     socket.on('zombie:damage',d=>{

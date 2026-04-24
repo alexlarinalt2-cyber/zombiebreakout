@@ -301,20 +301,8 @@ function gameTick(room){
     // Decrement by 2 per tick: server runs at 30 TPS but all cooldowns/timers are in 60fps frames.
     if(p.inv>0)p.inv=Math.max(0,p.inv-2);
     if(p.scd>0)p.scd=Math.max(0,p.scd-2);
-    // Position is client-authoritative — client sends x,y with every input packet.
-    // Server just uses whatever position the client reported (clamped to world bounds).
-    if(p.shoot&&p.scd===0){
-      let wn=p.inventory[p.slot]||p.inventory[0];
-      let wpn=WPN[wn.w];if(!wpn)continue;
-      if(wn.ammo===0)continue;
-      for(let i=0;i<wpn.pellts;i++){
-        let a=p.angle+(Math.random()-0.5)*wpn.sprd*2;
-        room.bl.push({id:genId(),x:p.x,y:p.y,vx:Math.cos(a)*wpn.bspd,vy:Math.sin(a)*wpn.bspd,
-          dmg:wpn.dmg+(p.dmgBonus||0),l:60,wtype:wn.w,owner:p.id,pierce:0});
-      }
-      if(wn.ammo!==Infinity)wn.ammo=Math.max(0,wn.ammo-1);
-      p.scd=Math.round(wpn.cd*(p.reloadMult||1));
-    }
+    // Bullets are now fired via bullet:fire events from the client (instant relay to others).
+    // No server-side bullet creation needed — clients emit bullet:fire on every fb() call.
   }
 
   // ── Bullets (movement + wall — zombie damage is client-side) ──
@@ -545,6 +533,17 @@ io.on('connection',socket=>{
       return{w:s.w,ammo:s.ammo===-1?Infinity:Math.min(s.ammo,wpn.ammo*2)};
     }).filter(Boolean);
     if(p.inventory.length===0)p.inventory=[{w:'pistol',ammo:Infinity}];
+  });
+
+  // Client fired a bullet — relay immediately to all other clients for instant local simulation
+  socket.on('bullet:fire',data=>{
+    let r=playerRoom(socket.id);
+    if(!r||!r.inGame)return;
+    // Relay to everyone else in the room — they'll simulate the bullet locally at 60fps
+    socket.to(r.id).emit('bullet:fired',{
+      x:data.x,y:data.y,vx:data.vx,vy:data.vy,l:data.l||85,
+      wtype:data.wtype,dmg:data.dmg||1,pierce:data.pierce||0,
+    });
   });
 
   // Client hit a zombie — relay damage to other clients so HP bars stay in sync
