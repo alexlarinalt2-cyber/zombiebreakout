@@ -2167,78 +2167,57 @@ function slotBarH(){let ns=pl.inventory?pl.inventory.length:1;return ns>0?54:0;}
 // -- Prep screen ------------------------------------------------
 function drawPrepOverlay(){
   let secs=Math.ceil(prepTimer/60);
-  // Top banner
-  X.fillStyle='rgba(0,0,0,0.78)';X.fillRect(0,0,W,68);
+  // Top banner only — world stays fully visible behind it
+  let bannerH=mpMode?84:64;
+  X.fillStyle='rgba(0,0,0,0.78)';X.fillRect(0,0,W,bannerH);
   X.textAlign='center';X.textBaseline='middle';
-  X.fillStyle='#ffdc00';X.font='bold 14px sans-serif';
-  X.fillText('PREP PHASE — grab weapons from buildings before the horde!',W/2,16);
+  X.fillStyle='#ffdc00';X.font='bold 13px sans-serif';
+  X.fillText('PREP PHASE — grab weapons from buildings before the horde!',W/2,14);
   // Countdown bar
-  let maxT=(mpMode?30:30)*60;
-  let frac=Math.max(0,prepTimer/maxT);
-  let barW=240,barH=10,bx=W/2-barW/2,by=32;
+  let frac=Math.max(0,prepTimer/(30*60));
+  let barW=220,barH=8,bx=W/2-barW/2,by=27;
   X.fillStyle='rgba(255,255,255,0.12)';X.fillRect(bx,by,barW,barH);
   X.fillStyle=secs<=5?'#ff4040':'#ffdc00';X.fillRect(bx,by,Math.round(barW*frac),barH);
-  X.fillStyle=secs<=5?'#ff4040':'#fff';X.font='bold 13px monospace';
-  X.fillText(secs+'s',W/2,by+barH+12);
-
-  // ── Incoming wave preview ──────────────────────────────────────
-  let comp=mpMode?mpNextWaveComp:waveComp(lv);
-  let entries=Object.entries(comp).filter(([,v])=>v>0);
-  if(entries.length>0){
+  X.fillStyle=secs<=5?'#ff4040':'#fff';X.font='bold 12px monospace';
+  X.fillText(secs+'s',W/2,by+barH+9);
+  // MP only: show incoming wave composition as a compact text row
+  if(mpMode){
+    let comp=mpNextWaveComp;
     let labels={basic:'Basic',runner:'Runners',tank:'Tanks',exploder:'Exploders',boss:'BOSS'};
-    let cols={basic:'#888',runner:'#22dd66',tank:'#4488ff',exploder:'#ff8800',boss:'#ff2222'};
-    let panelW=360,panelH=58,panelX=W/2-panelW/2,panelY=H/2-panelH/2;
-    X.fillStyle='rgba(0,0,0,0.75)';
-    if(X.roundRect)X.roundRect(panelX,panelY,panelW,panelH,8);else X.rect(panelX,panelY,panelW,panelH);
-    X.fill();
-    X.strokeStyle='rgba(255,220,0,0.4)';X.lineWidth=1.5;X.stroke();
-    X.fillStyle='#ffdc00';X.font='bold 11px sans-serif';X.textAlign='center';
-    X.fillText('WAVE '+(mpMode?mpWave:lv)+' INCOMING',W/2,panelY+14);
-    // Pills
-    X.font='bold 11px sans-serif';
-    let totalW=entries.reduce((a,[k,v])=>a+X.measureText((v>1?v+'× ':'')+labels[k]).width+18,0)+(entries.length-1)*6;
-    let px=W/2-totalW/2;
-    for(let[type,count] of entries){
-      let txt=(count>1?count+'× ':'')+labels[type];
-      let tw=X.measureText(txt).width+18;
-      X.fillStyle=cols[type]||'#aaa';
-      if(X.roundRect)X.roundRect(px,panelY+24,tw,20,4);else X.rect(px,panelY+24,tw,20);
-      X.fill();
-      X.fillStyle='#fff';X.font='bold 10px sans-serif';X.textAlign='center';X.textBaseline='middle';
-      X.fillText(txt,px+tw/2,panelY+34);
-      px+=tw+6;
+    let entries=Object.entries(comp).filter(([,v])=>v>0);
+    if(entries.length>0){
+      let parts=entries.map(([k,v])=>(v>1?v+'× ':'')+labels[k]);
+      X.fillStyle='rgba(255,180,60,0.85)';X.font='11px sans-serif';X.textAlign='center';X.textBaseline='middle';
+      X.fillText('Wave '+(mpWave||1)+':  '+parts.join('  ·  '),W/2,72);
     }
   }
-
-  // ── Other player arrows (MP only, off-screen players) ─────────
+  // Off-screen teammate arrows — small, at screen edges, world stays clear
   if(mpMode){
     const charCols=['#2854c8','#c89020','#28a050'];
     for(let p of mpPlayers){
       if(p.id===mpMyId||!p.alive)continue;
       let sx=scx(p.x),sy=scy(p.y);
-      if(sx>=30&&sx<=W-30&&sy>=80&&sy<=H-30)continue; // on screen already
-      // Arrow at screen edge pointing toward the player
+      // Only draw arrow if player is off-screen
+      if(sx>30&&sx<W-30&&sy>bannerH&&sy<H-30)continue;
       let ang=Math.atan2(sy-H/2,sx-W/2);
-      let margin=30;
-      // Clamp to screen edge
-      let ex,ey;
-      let t1=(sx>W/2?(W/2-margin):(-(W/2-margin)))/(sx-W/2);
-      let t2=(sy>H/2?(H/2-margin):(-(H/2-margin)))/(sy-H/2);
-      let t=Math.min(isFinite(t1)?t1:Infinity,isFinite(t2)?t2:Infinity);
-      ex=W/2+(sx-W/2)*t;ey=H/2+(sy-H/2)*t;
-      ex=Math.max(margin,Math.min(W-margin,ex));ey=Math.max(80+margin,Math.min(H-margin,ey));
+      // Find edge intersection
+      let margin=28,dsx=sx-W/2,dsy=sy-H/2;
+      let sx_=Math.abs(dsx)>0.001?Math.abs((W/2-margin)/dsx):Infinity;
+      let sy_=Math.abs(dsy)>0.001?Math.abs((H/2-margin)/dsy):Infinity;
+      let sc_=Math.min(sx_,sy_);
+      let ex=Math.max(margin,Math.min(W-margin,W/2+dsx*sc_));
+      let ey=Math.max(bannerH+margin,Math.min(H-margin,H/2+dsy*sc_));
       let col=charCols[p.char||0]||'#4488ff';
-      // Pulsing alpha
-      let alpha=0.7+Math.sin(tk*0.12)*0.3;
-      X.globalAlpha=alpha;
-      X.save();X.translate(ex,ey);X.rotate(ang);
-      X.fillStyle=col;X.strokeStyle='#fff';X.lineWidth=1.5;
-      X.beginPath();X.moveTo(12,0);X.lineTo(-7,7);X.lineTo(-4,0);X.lineTo(-7,-7);X.closePath();
+      let alpha=0.72+Math.sin(tk*0.12)*0.28;
+      X.save();X.globalAlpha=alpha;
+      X.translate(ex,ey);X.rotate(ang);
+      X.fillStyle=col;X.strokeStyle='rgba(255,255,255,0.9)';X.lineWidth=1.5;
+      X.beginPath();X.moveTo(11,0);X.lineTo(-6,6);X.lineTo(-3,0);X.lineTo(-6,-6);X.closePath();
       X.fill();X.stroke();
       X.restore();
       X.globalAlpha=alpha;
       X.fillStyle='#fff';X.font='bold 9px sans-serif';X.textAlign='center';X.textBaseline='top';
-      X.fillText(p.name.slice(0,10),ex,ey+14);
+      X.fillText(p.name.slice(0,10),ex,ey+13);
       X.globalAlpha=1;
     }
   }
