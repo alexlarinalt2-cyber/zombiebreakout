@@ -1215,6 +1215,14 @@ function upd(){
       if(tk%120===0&&zs.length>0)for(let i=0;i<zs.length;i++)zs[i].surroundAng=(i/zs.length)*Math.PI*2+Math.random()*0.5;
       // ── Run zombie AI locally (singleplayer feel in multiplayer) ──
       updZombies(dt);
+      // ── Host relays boss position to others at ~10Hz (every 6 frames at 60fps) ──
+      // Non-host clients lerp toward this so boss stays in sync despite independent AI
+      if(socket&&mpRoom&&mpRoom.host===mpMyId&&tk%6===0){
+        for(let z of zs){
+          if(z.type==='boss'&&!z.dying)
+            socket.emit('zombie:pos',{id:z.id,x:z.x,y:z.y,charging:z.charging,chargeDx:z.chargeDx||0,chargeDy:z.chargeDy||0});
+        }
+      }
     }
     mpSendInput();
     return;
@@ -3540,6 +3548,16 @@ function mpInitLobby(){
         addDecal(z.x,z.y,(ZT[z.type||'basic']||ZT.basic).r+8,'#4a0000'); // blood splat
         z.dying=true;
         z.dyingVx=(Math.random()-0.5)*8;z.dyingVy=-(Math.random()*3+2);z.dyingTimer=22;
+      }
+    });
+    // Host sent authoritative boss position — lerp toward it so both screens match
+    socket.on('zombie:pos',d=>{
+      let z=zs.find(zz=>zz.id===d.id&&!zz.dying);
+      if(!z)return;
+      z.x+=(d.x-z.x)*0.35;z.y+=(d.y-z.y)*0.35; // smooth correction, not hard snap
+      if(d.charging!==undefined){
+        z.charging=d.charging;
+        if(d.charging){z.chargeDx=d.chargeDx;z.chargeDy=d.chargeDy;}
       }
     });
     socket.on('wave:clear',d=>{announce('Wave '+d.lv+' clear!');});

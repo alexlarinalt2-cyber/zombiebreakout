@@ -352,9 +352,9 @@ function startGame(room){
   room.gameLoop=setInterval(()=>gameTick(room),33); // ~30 TPS
   // Emit game:started — clients enter 10-second prep phase.
   // wave:zombies arrives 10s later so players can grab weapons first.
-  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv,prepTime:10});
+  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv,prepTime:30});
   if(room.prepTimeout)clearTimeout(room.prepTimeout);
-  room.prepTimeout=setTimeout(()=>{if(room.inGame)spawnWave(room);},10000);
+  room.prepTimeout=setTimeout(()=>{if(room.inGame)spawnWave(room);},30000);
   io.emit('lobby:rooms',{rooms:roomList()});
 }
 
@@ -546,6 +546,15 @@ io.on('connection',socket=>{
       x:data.x,y:data.y,vx:data.vx,vy:data.vy,l:data.l||85,
       wtype:data.wtype,dmg:data.dmg||1,pierce:data.pierce||0,
     });
+  });
+
+  // Host client sends authoritative boss position — relay to others so boss stays in sync across clients
+  socket.on('zombie:pos',data=>{
+    let r=playerRoom(socket.id);
+    if(!r||!r.inGame)return;
+    if(r.host!==socket.id)return; // only host is position authority
+    socket.to(r.id).emit('zombie:pos',{id:data.id,x:data.x,y:data.y,
+      charging:data.charging,chargeDx:data.chargeDx,chargeDy:data.chargeDy});
   });
 
   // Client hit a zombie — relay damage to other clients so HP bars stay in sync
