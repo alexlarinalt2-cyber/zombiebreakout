@@ -352,7 +352,8 @@ function startGame(room){
   room.gameLoop=setInterval(()=>gameTick(room),33); // ~30 TPS
   // Emit game:started — clients enter 10-second prep phase.
   // wave:zombies arrives 10s later so players can grab weapons first.
-  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv,prepTime:30});
+  io.to(room.id).emit('game:started',{difficulty:room.difficulty,lv:room.lv,prepTime:30,
+    waveComp:waveComp(1,room.difficulty)});
   if(room.prepTimeout)clearTimeout(room.prepTimeout);
   room.prepTimeout=setTimeout(()=>{if(room.inGame)spawnWave(room);},30000);
   io.emit('lobby:rooms',{rooms:roomList()});
@@ -579,8 +580,10 @@ io.on('connection',socket=>{
     socket.to(r.id).emit('zombie:died',{id:data.id});
     // Wave end when all zombies accounted for
     if(r.killedCount>=(r.totalZombies||Infinity)&&r.gst==='playing'){
-      r.gst='wave_clear';r.waveClearTimer=60; // 60 ticks × 33ms = 2s — matches singleplayer nl() waveClearTimer=120 frames
+      r.gst='wave_clear';r.waveClearTimer=60; // 60 ticks × 33ms = 2s
       io.to(r.id).emit('wave:clear',{lv:r.lv});
+      // Tell clients what's coming next so they can show it during the break
+      io.to(r.id).emit('wave:preview',{comp:waveComp(r.lv+1,r.difficulty),lv:r.lv+1});
     }
   });
 
