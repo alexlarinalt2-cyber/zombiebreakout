@@ -1736,6 +1736,7 @@ function draw(){
   X.fillStyle='#000';X.fillRect(0,0,C.width,C.height);
   X.setTransform(SCALE,0,0,SCALE,0,0);
   if(st==='menu'){dmenu();return;}
+  if(st==='modeselect'){dmenu();drawModeSelect();return;}
   if(st==='lobby'){dlobby();return;}
   if(st==='room_lobby'){droomlobby();return;}
   if(st==='charselect'){drawCharSelect();return;}
@@ -3148,21 +3149,6 @@ function dmenu(){
   X.font='bold 14px sans-serif';X.textAlign='center';X.textBaseline='middle';
   X.fillText('Upgrades',W/2,sDraw+sH/2);
 
-  // MULTIPLAYER button
-  let mpBW=140,mpBH=34,mpBX=W/2-mpBW/2,mpBY=sY+sH+10;
-  let mpBHov=ms.x>=mpBX&&ms.x<=mpBX+mpBW&&ms.y>=mpBY&&ms.y<=mpBY+mpBH;
-  let mpBDraw=mpBY-(mpBHov?2:0);
-  rrx(mpBX+1,mpBDraw+(mpBHov?6:3),mpBW,mpBH,8,'rgba(0,0,0,0.55)');
-  let mpBG=X.createLinearGradient(0,mpBDraw,0,mpBDraw+mpBH);
-  if(mpBHov){mpBG.addColorStop(0,'rgba(0,100,200,0.97)');mpBG.addColorStop(1,'rgba(0,50,130,0.97)');}
-  else{mpBG.addColorStop(0,'rgba(0,70,160,0.88)');mpBG.addColorStop(1,'rgba(0,35,100,0.85)');}
-  rrx(mpBX,mpBDraw,mpBW,mpBH,8,mpBG,mpBHov?'#60c0ff':'rgba(40,120,220,0.7)',mpBHov?2:1);
-  X.globalAlpha=mpBHov?0.45:0.25;X.strokeStyle='rgba(180,230,255,1)';X.lineWidth=1;
-  X.beginPath();X.moveTo(mpBX+10,mpBDraw+2);X.lineTo(mpBX+mpBW-10,mpBDraw+2);X.stroke();X.globalAlpha=1;
-  X.fillStyle=mpBHov?'#fff':'#90d0ff';
-  X.font='bold 13px sans-serif';X.textAlign='center';X.textBaseline='middle';
-  X.fillText('MULTIPLAYER',W/2,mpBDraw+mpBH/2);
-
   if(metaCoins>0){
     let mcY=sY+sH+14;
     X.font='bold 12px sans-serif';X.textAlign='center';X.textBaseline='middle';
@@ -3176,7 +3162,7 @@ function dmenu(){
 
   // ── Leaderboard ─────────────────────────────────────────────
   if(highScores.length>0){
-    let lY2=mpBY+mpBH+10;
+    let lY2=sY+sH+(metaCoins>0?30:18);
     let lW=360,lH=82,lX=W/2-lW/2;
     // Drop shadow
     rrx(lX+2,lY2+4,lW,lH,8,'rgba(0,0,0,0.45)');
@@ -3200,6 +3186,66 @@ function dmenu(){
       X.fillText('Wave '+hs.l+' / '+hs.k+' kills',lX+lW-14,ry);
     }
   }
+}
+
+// -- Mode select overlay (shown over menu background) ----------
+function drawModeSelect(){
+  // Dim the menu behind
+  X.fillStyle='rgba(0,0,0,0.72)';X.fillRect(0,0,W,H);
+  // Panel
+  let pW=400,pH=210,pX=W/2-pW/2,pY=H/2-pH/2-20;
+  pnl(pX,pY,pW,pH,14,'rgba(10,2,2,0.97)','rgba(4,0,0,0.98)','rgba(200,35,35,0.5)',1.5);
+  // Red accent top bar
+  let acRed=X.createLinearGradient(pX,0,pX+pW,0);
+  acRed.addColorStop(0,'rgba(220,40,40,0)');acRed.addColorStop(0.5,'rgba(255,80,80,0.8)');acRed.addColorStop(1,'rgba(220,40,40,0)');
+  X.fillStyle=acRed;X.fillRect(pX+16,pY+5,pW-32,1.5);
+  // Title
+  X.fillStyle='rgba(255,255,255,0.9)';X.font='bold 17px sans-serif';X.textAlign='center';X.textBaseline='middle';
+  X.fillText('SELECT MODE',W/2,pY+26);
+
+  let btnW=158,btnH=56,gap=12;
+  let totalW=btnW*2+gap,startX=W/2-totalW/2,btnY=pY+55;
+
+  // ── SOLO button ──────────────────────────────────────────────
+  let soX=startX,soHov=ms.x>=soX&&ms.x<=soX+btnW&&ms.y>=btnY&&ms.y<=btnY+btnH;
+  let soDraw=btnY-(soHov?2:0);
+  X.globalAlpha=(soHov?1:0.8)*0.22;X.fillStyle='#ff2020';
+  X.beginPath();X.ellipse(soX+btnW/2,soDraw+btnH/2,btnW*0.6,btnH*1.2,0,0,Math.PI*2);X.fill();X.globalAlpha=1;
+  rrx(soX+1,soDraw+(soHov?7:4),btnW,btnH,10,'rgba(0,0,0,0.55)');
+  let soG=X.createLinearGradient(0,soDraw,0,soDraw+btnH);
+  if(soHov){soG.addColorStop(0,'rgba(250,60,60,0.98)');soG.addColorStop(1,'rgba(130,8,8,0.96)');}
+  else{soG.addColorStop(0,'rgba(200,25,25,0.93)');soG.addColorStop(1,'rgba(105,6,6,0.88)');}
+  rrx(soX,soDraw,btnW,btnH,10,soG,soHov?'#ff7878':'rgba(220,50,50,0.8)',soHov?2:1.5);
+  X.globalAlpha=soHov?0.5:0.3;X.strokeStyle='rgba(255,230,230,1)';X.lineWidth=1;
+  X.beginPath();X.moveTo(soX+12,soDraw+2.5);X.lineTo(soX+btnW-12,soDraw+2.5);X.stroke();X.globalAlpha=1;
+  X.fillStyle=soHov?'#fff':'#ffdddd';X.font='bold 15px sans-serif';X.textAlign='center';X.textBaseline='middle';
+  X.fillText('SOLO',soX+btnW/2,soDraw+btnH/2-7);
+  X.fillStyle=soHov?'rgba(255,230,230,0.85)':'rgba(255,180,180,0.55)';X.font='10px sans-serif';
+  X.fillText('Single Player',soX+btnW/2,soDraw+btnH/2+9);
+
+  // ── MULTIPLAYER button ────────────────────────────────────────
+  let mpX2=startX+btnW+gap,mpHov2=ms.x>=mpX2&&ms.x<=mpX2+btnW&&ms.y>=btnY&&ms.y<=btnY+btnH;
+  let mpDraw=btnY-(mpHov2?2:0);
+  X.globalAlpha=(mpHov2?1:0.8)*0.22;X.fillStyle='#2060ff';
+  X.beginPath();X.ellipse(mpX2+btnW/2,mpDraw+btnH/2,btnW*0.6,btnH*1.2,0,0,Math.PI*2);X.fill();X.globalAlpha=1;
+  rrx(mpX2+1,mpDraw+(mpHov2?7:4),btnW,btnH,10,'rgba(0,0,0,0.55)');
+  let mpG2=X.createLinearGradient(0,mpDraw,0,mpDraw+btnH);
+  if(mpHov2){mpG2.addColorStop(0,'rgba(0,110,220,0.98)');mpG2.addColorStop(1,'rgba(0,50,140,0.97)');}
+  else{mpG2.addColorStop(0,'rgba(0,75,170,0.92)');mpG2.addColorStop(1,'rgba(0,38,105,0.88)');}
+  rrx(mpX2,mpDraw,btnW,btnH,10,mpG2,mpHov2?'#60c0ff':'rgba(40,120,220,0.75)',mpHov2?2:1.5);
+  X.globalAlpha=mpHov2?0.5:0.3;X.strokeStyle='rgba(180,230,255,1)';X.lineWidth=1;
+  X.beginPath();X.moveTo(mpX2+12,mpDraw+2.5);X.lineTo(mpX2+btnW-12,mpDraw+2.5);X.stroke();X.globalAlpha=1;
+  X.fillStyle=mpHov2?'#fff':'#a0d8ff';X.font='bold 15px sans-serif';X.textAlign='center';X.textBaseline='middle';
+  X.fillText('MULTIPLAYER',mpX2+btnW/2,mpDraw+btnH/2-7);
+  X.fillStyle=mpHov2?'rgba(200,235,255,0.85)':'rgba(140,200,255,0.55)';X.font='10px sans-serif';
+  X.fillText('Online Co-op',mpX2+btnW/2,mpDraw+btnH/2+9);
+
+  // ── BACK button ───────────────────────────────────────────────
+  let bkW=90,bkH=26,bkX=W/2-bkW/2,bkY=pY+pH-36;
+  let bkHov=ms.x>=bkX&&ms.x<=bkX+bkW&&ms.y>=bkY&&ms.y<=bkY+bkH;
+  rrx(bkX,bkY,bkW,bkH,6,bkHov?'rgba(80,80,80,0.85)':'rgba(40,40,40,0.7)',bkHov?'rgba(160,160,160,0.6)':'rgba(80,80,80,0.3)',1);
+  X.fillStyle=bkHov?'#fff':'rgba(200,200,200,0.7)';X.font='12px sans-serif';X.textAlign='center';X.textBaseline='middle';
+  X.fillText('← Back',W/2,bkY+bkH/2);
 }
 
 // -- Game over -------------------------------------------------
@@ -3380,7 +3426,8 @@ document.addEventListener('keydown',e=>{
     if(e.key==='q'||e.key==='Q')switchRel(-1);if(e.key==='e'||e.key==='E')switchRel(1);
     if(e.key==='1')doSwitch(0);if(e.key==='2')doSwitch(1);if(e.key==='3')doSwitch(2);if(e.key==='4')doSwitch(3);
   }
-  if(e.key==='S'&&st==='menu'){initAudio();st='charselect';}
+  if(e.key==='S'&&st==='menu'){initAudio();st='modeselect';}
+  if(e.key==='Escape'&&st==='modeselect'){st='menu';}
   if((e.key==='r'||e.key==='R')&&st==='game_over'){if(!runSaved){saveHS();runSaved=true;}st='shop';}
 });
 document.addEventListener('keyup',e=>{
@@ -3505,10 +3552,20 @@ C.addEventListener('click',e=>{
     let panelW=520,panelH=260,panelY=H/2-panelH/2-40;
     let bW=180,bH=46,bX=W/2-bW/2,bY=panelY+panelH-30;
     let sW=140,sH=34,sX=W/2-sW/2,sY=bY+bH+10;
-    let mpBW=140,mpBH=34,mpBX=W/2-mpBW/2,mpBY=sY+sH+10;
-    if(ms.x>=bX&&ms.x<=bX+bW&&ms.y>=bY&&ms.y<=bY+bH) st='charselect';
+    if(ms.x>=bX&&ms.x<=bX+bW&&ms.y>=bY&&ms.y<=bY+bH) st='modeselect';
     else if(ms.x>=sX&&ms.x<=sX+sW&&ms.y>=sY&&ms.y<=sY+sH) st='shop';
-    else if(ms.x>=mpBX&&ms.x<=mpBX+mpBW&&ms.y>=mpBY&&ms.y<=mpBY+mpBH){mpInitLobby();}
+    return;
+  }
+  if(st==='modeselect'){
+    initAudio();
+    let pW=400,pH=210,pX=W/2-pW/2,pY=H/2-pH/2-20;
+    let btnW=158,btnH=56,gap=12,totalW=btnW*2+gap,startX=W/2-totalW/2,btnY=pY+55;
+    let soX=startX;
+    let mpX2=startX+btnW+gap;
+    let bkW=90,bkH=26,bkX=W/2-bkW/2,bkY=pY+pH-36;
+    if(ms.x>=soX&&ms.x<=soX+btnW&&ms.y>=btnY&&ms.y<=btnY+btnH) st='charselect';
+    else if(ms.x>=mpX2&&ms.x<=mpX2+btnW&&ms.y>=btnY&&ms.y<=btnY+btnH) mpInitLobby();
+    else if(ms.x>=bkX&&ms.x<=bkX+bkW&&ms.y>=bkY&&ms.y<=bkY+bkH) st='menu';
     return;
   }
   if(st==='lobby'){mpLobbyClick(ms.x,ms.y);return;}
