@@ -1158,7 +1158,7 @@ function upd(){
     }
     return;
   }
-  if(st==='wave_preview'){updParticles();return;}
+  if(st==='wave_preview'){updParticles();if(mpMode)mpSendInput();return;}
   if(st==='wave_clear'){
     updParticles();waveClearTimer--;
     if(waveClearTimer<=0)startNextWave();
@@ -3589,7 +3589,10 @@ function mpInitLobby(){
       for(let p of mpPlayers){if(p.id!==mpMyId&&p.alive){_ftx+=p.x;_fty+=p.y;_fn++;}}
       buildFF(_ftx/_fn,_fty/_fn);
       mpPrepStuck=0; // reset prep-stuck counter
-      st='playing'; // transition out of prep phase or wave_clear into playing
+      // Show the same wave-preview screen as singleplayer (4-second countdown)
+      waveInfo=mpNextWaveComp;
+      waveStartTs=performance.now();
+      st='wave_preview';
     });
     // Another client killed a zombie — remove it from our local simulation
     socket.on('zombie:died',d=>{
