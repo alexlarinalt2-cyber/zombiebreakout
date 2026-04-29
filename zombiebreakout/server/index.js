@@ -587,6 +587,15 @@ io.on('connection',socket=>{
     }
   });
 
+  // Client timed out waiting for wave:zombies — fire spawnWave if not already started
+  socket.on('wave:request',()=>{
+    let r=playerRoom(socket.id);
+    if(!r||!r.inGame||r.gst!=='playing')return;
+    if(r.totalZombies>0)return; // wave already spawned, don't re-spawn
+    if(r.prepTimeout){clearTimeout(r.prepTimeout);r.prepTimeout=null;}
+    spawnWave(r);
+  });
+
   // Client reports zombie attack damage (client runs zombie AI)
   socket.on('player:hit',data=>{
     let r=playerRoom(socket.id);

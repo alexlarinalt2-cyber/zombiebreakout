@@ -358,6 +358,7 @@ let mpPlayers=[];         // all players from server state (includes self)
 let mpPrevPlayers=[];     // previous server state — used to interpolate other players between ticks
 let mpRemoteBullets=[];   // other players' bullets simulated locally at 60fps (via bullet:fired events)
 let mpNextWaveComp={};    // zombie composition for upcoming wave (shown during prep)
+let mpPrepStuck=0;        // frames spent at prepTimer=0, for wave:request fallback
 let mpZombies=[];         // server zombies
 let mpBullets=[];         // server bullets
 let mpWave=1;             // current wave from server
@@ -1135,7 +1136,14 @@ function upd(){
       for(let i=decals.length-1;i>=0;i--){decals[i].l-=0.002;if(decals[i].l<=0)decals.splice(i,1);}
       for(let i=xpOrbs.length-1;i>=0;i--){let o=xpOrbs[i];o.l-=0.015;if(o.l<=0)xpOrbs.splice(i,1);}
       for(let i=dmgDirs.length-1;i>=0;i--){dmgDirs[i].l-=0.018;if(dmgDirs[i].l<=0)dmgDirs.splice(i,1);}
-      if(prepTimer>0)prepTimer--;
+      if(prepTimer>0){prepTimer--;mpPrepStuck=0;}
+      else{
+        // Timer hit 0 — waiting for wave:zombies from server.
+        // If it doesn't arrive within 3s, ask the server to kick off the wave.
+        if(!mpPrepStuck)mpPrepStuck=0;
+        mpPrepStuck++;
+        if(mpPrepStuck===180&&socket)socket.emit('wave:request'); // 3s grace
+      }
       let _tn=(lv>0&&lv%6===0)?1:0;
       if(_tn&&nightAlpha<0.85)nightAlpha=Math.min(0.85,nightAlpha+0.003);
       else if(!_tn&&nightAlpha>0)nightAlpha=Math.max(0,nightAlpha-0.003);
@@ -3578,6 +3586,7 @@ function mpInitLobby(){
       let _ftx=pl.x,_fty=pl.y,_fn=1;
       for(let p of mpPlayers){if(p.id!==mpMyId&&p.alive){_ftx+=p.x;_fty+=p.y;_fn++;}}
       buildFF(_ftx/_fn,_fty/_fn);
+      mpPrepStuck=0; // reset prep-stuck counter
       st='playing'; // transition out of prep phase or wave_clear into playing
     });
     // Another client killed a zombie — remove it from our local simulation
@@ -3606,11 +3615,14 @@ function mpInitLobby(){
       z.hp=Math.max(0,z.hp-d.damage);
       z.flashT=10;z.hpBarTimer=120;
       // Do NOT call killZ — that would credit local player with streak/combo.
-      // zombie:died will arrive from server when the killing client's zombie:killed is processed.
+      // But DO emit zombie:killed if this cross-client damage finishes the zombie,
+      // because neither client's local bullet loop will call killZ in this case.
+      // Server deduplicates via killedIds so no double-counting.
       if(z.hp<=0&&!z.dying){
         addDecal(z.x,z.y,(ZT[z.type||'basic']||ZT.basic).r+8,'#4a0000'); // blood splat
         z.dying=true;
         z.dyingVx=(Math.random()-0.5)*8;z.dyingVy=-(Math.random()*3+2);z.dyingTimer=22;
+        if(socket)socket.emit('zombie:killed',{id:d.id,type:z.type||'basic'});
       }
     });
     // Host sent authoritative boss position — lerp toward it so both screens match
