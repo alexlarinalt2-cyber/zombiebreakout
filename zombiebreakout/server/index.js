@@ -587,6 +587,15 @@ io.on('connection',socket=>{
     }
   });
 
+  // Client picked up the hospital medkit — restore HP to max on the server
+  socket.on('player:heal',()=>{
+    let r=playerRoom(socket.id);
+    if(!r||!r.inGame)return;
+    let p=r.players.get(socket.id);
+    if(!p||!p.alive)return;
+    p.hp=p.maxHp;
+  });
+
   // Client timed out waiting for wave:zombies — fire spawnWave if not already started
   socket.on('wave:request',()=>{
     let r=playerRoom(socket.id);

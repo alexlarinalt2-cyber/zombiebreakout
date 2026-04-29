@@ -1413,6 +1413,8 @@ function updPickups(){
       bst(b.medkit.wx,b.medkit.wy,'#22ff88',20,6);
       addDmgNum(b.medkit.wx,b.medkit.wy-24,'FULL HEAL + INVINCIBLE!','#22ff88');
       playSound('pickup');sc+=250;
+      // In MP: tell server so the HP sync doesn't immediately overwrite the heal
+      if(mpMode&&socket)socket.emit('player:heal');
     }
   }
   // Weapon crates
